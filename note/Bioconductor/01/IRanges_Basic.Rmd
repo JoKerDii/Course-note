@@ -1,0 +1,175 @@
+---
+Di Zhen
+
+Iranges_Basics_Note
+---
+
+```{r}
+library(IRanges)
+```
+
+## Basic IRanges
+  
+Specify IRanges by 2 of start, end, width (SEW).
+  
+```{r iranges1}
+ir1 <- IRanges(start = c(1,3,5), end = c(3,5,7))
+ir1
+ir2 <- IRanges(start = c(1,3,5), width = 3)
+
+all.equal(ir1, ir2)
+``` 
+
+Assessor methods: `start()`, `end()`, `width()` and also replacement methods.
+
+```{r ir_width}
+start(ir1)
+width(ir2) <- 1 # change width to 1
+ir2
+```
+
+They may have names
+
+```{r ir_names}
+names(ir1) <- paste("A", 1:3, sep = "") # add names
+ir1
+```
+
+They have a single dimension
+
+```{r ir_dim}
+dim(ir1)
+length(ir1)
+``` 
+
+subsetting works like a vector
+```{r ir_subset}
+ir1[1]
+ir1["A1"]
+```
+
+concatenate two `IRanges` with the `c()` function
+```{r concatenate}
+c(ir1, ir2)
+```
+
+## Normal IRanges
+
+A normal IRanges is a minimal representation of the IRanges viewed as a set.  Each integer only occur in a single range and there are as few ranges as possible.  In addition, it is ordered.  Many functions produce a normal `IRanges`.  Created by `reduce()`.
+
+```{r irNormal1, echo=FALSE}
+# Create IRange
+ir <- IRanges(start = c(1,3,7,9), end = c(4,4,8,10))
+``` 
+
+
+```{r irNormal4}
+ir
+reduce(ir)
+``` 
+
+Answers: "Given a set of overlapping exons, which bases belong to an exon?"
+
+
+## Disjoin
+
+`disjoin()` is the opposite of `reduce()`. 
+
+```{r irDisjoin1, eval=FALSE}
+disjoin(ir1)
+```
+
+Answers: "Give a set of overlapping exons, which bases belong to the same set of exons?"
+
+## Manipulating IRanges, intra-range
+
+"Intra-range" manipulations: each original range gets mapped to a new range.
+
+`shift()`, `narrow()`, `flank()`, `resize()`, `restrict()`.
+
+For example, `resize()` can be extremely useful.  It has a `fix` argument controlling where the resizing occurs from.  Use `fix="center"` to resize around the center of the ranges; I use this a lot.
+
+```{r ir_resize}
+resize(ir, width = 1, fix = "start")
+resize(ir, width = 1, fix = "center")
+```
+
+note that there is both a help page in `Biocpkg("IRanges")` and `Biocpkg("GenomicRanges")`.
+
+## Manipulating IRanges, as sets
+
+Calling `reduce()` on the `IRanges` first.
+
+Then, we can use standard: `union()`, `intersect()`, `setdiff()`, `gaps()` between two `IRanges` (which all returns normalized `IRanges`).
+
+```{r ir_sets}
+ir1 <- IRanges(start = c(1, 3, 5), width = 1)
+ir2 <- IRanges(start = c(4, 5, 6), width = 1)
+ir1
+ir2
+union(ir1, ir2)
+intersect(ir1, ir2)
+```
+
+An alternative to `union()` is
+```{r union2}
+reduce(c(ir1, ir2))
+```
+
+
+## Finding Overlaps
+
+Finding (pairwise) overlaps between two `IRanges` is done by `findOverlaps()`. 
+
+```{r findOverlaps}
+ir1 <- IRanges(start = c(1,4,8), end = c(3,7,10))
+ir1
+ir2 <- IRanges(start = c(3,4), width = 3)
+ir2
+ov <- findOverlaps(ir1, ir2)
+ov # query = ir1, subject = ir2
+``` 
+
+It returns a `Hits` object which describes the relationship between the two `IRanges`.
+
+The two columns of the hits object can be accessed by `queryHits()` and `subjectHits()` (often used with `unique()`).
+
+For example, the first row of the matrix describes that the first range of `ir1` overlaps with the first range of `ir2`.
+
+```{r findOverlaps_ill}
+intersect(ir1[subjectHits(ov)[1]],
+          ir2[queryHits(ov)[2]])
+```
+
+The elements of `unique(queryHits)` gives you the indices of the query ranges which actually had an overlap.
+
+```{r subjectHits}
+queryHits(ov)
+unique(queryHits(ov))
+```
+
+The list of arguments to `findOverlaps()` is long. For example, you can ask to only get an overlap if two ranges overlap by a certain number of bases.
+
+```{r argsFindOverlaps, tidy=TRUE}
+args(findOverlaps)
+``` 
+
+## countOverlaps
+
+`countOverlaps()` returns the number of overlaps.
+
+```{r countOverlaps}
+countOverlaps(ir1, ir2)
+``` 
+
+## Finding nearest IRanges
+
+Sometimes you have two sets of `IRanges` and you need to know which ones are closest to each other.  Functions for this include `nearest()`, `precede()`, `follow()`. 
+
+`nearest(x, subject)` returns an integer vector containing the index of the nearest neighbor range in subject for each range in x.
+
+```{r nearest}
+ir1
+ir2
+nearest(ir1, ir2)
+``` 
