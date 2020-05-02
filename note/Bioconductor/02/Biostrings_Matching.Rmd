@@ -1,0 +1,53 @@
+---
+
+Biostring_Matching_Note
+---
+
+```{r dependencies, warning=FALSE, message=FALSE}
+library(Biostrings)
+library(BSgenome)
+library(BSgenome.Scerevisiae.UCSC.sacCer2)
+
+```
+
+## Pattern matching
+
+To find patterns in (long) sequences- `Biocpkg("Biostrings")`:
+
+- `matchPattern` and `vmatchPattern`: match a single sequence against one sequence (`matchPattern`) or more than one (`vmatchPattern`) sequences.
+- `matchPDict` and `vmatchPDict`: match a (possibly large) set of sequences against one sequence (`matchPDict`) or more than one (`vmatchPDict`) sequences.
+
+Functions with similar naming using `count` instead of `match` (eg. `countPatterns`) return the number of matches.
+
+These functions are designed to be comprehensive (return all matches satisfying certain criteria).
+
+```{r mmatchPattern}
+dnaseq <- DNAString("ACGTACGT")
+dnaseq
+matchPattern(dnaseq, Scerevisiae$chrI)
+countPattern(dnaseq, Scerevisiae$chrI)
+vmatchPattern(dnaseq, Scerevisiae) # examine across all chromosomes
+head(vcountPattern(dnaseq, Scerevisiae))
+```
+
+First, the return object of `vmatchPattern` is a `GRanges` given the exact information of where the string matches.  The Sequence we search for is its own reverse complement, so we get hits on both strands (which makes sense).
+
+```{r revCompCheck}
+dnaseq == reverseComplement(dnaseq)
+```
+
+Second, the return object of `matchPattern` looks like an `IRanges` but is called a `Views`.
+
+## Specialized alignments
+
+There are a number of other, specialized, alignment functions in `Biocpkg("Biostrings")`:
+
+- `matchPWM`: a position weight matrix is a common way to represent for example a transcription factor binding motif (think sequence logos).  This function allows you to search for such motifs in the genome.
+- `pairwiseAlignment`: This function implements pairwise alignments using dynamic programming; providing an interface to both the Smith-Waterman local alignment problem and the Needleman-Wunsch global alignment problems.
+- `trimLRpattern` (trim left-right pattern): Takes a set of sequences and looks for whether they start or end with a given (other sequence), for example a sequencing adapter.  Used for trimming reads based on adapter sequences.
+
+For now, we will avoid further discussion of these functions.
+
+One note: `pairwiseAlignment` allows you to do pairwise alignments of millions of short reads against a single sequence, for example a gene or a transposable element.  Few people use these algorithms for short read data, because the algorithms scale badly with the length of the sequence (ie. the genome), but they work fine for millions of reads as long as the reference sequence is short.  This approach might be very fruitful if you are particular interested in high-quality alignments to a specific small gene or region of the genome.
+
+

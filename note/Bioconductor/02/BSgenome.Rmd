@@ -1,0 +1,61 @@
+---
+
+BSgenome_Note
+---
+
+```{r dependencies, warning=FALSE, message=FALSE}
+library(BSgenome)
+library(BSgenome.Scerevisiae.UCSC.sacCer2)
+```
+
+## Overview
+
+The `Biocpkg("BSgenome")` package contains infrastructure for representing genome sequences in Bioconductor.
+
+## Genomes
+
+The `Biocpkg("BSgenome")` package provides support for genomes. In Bioconductor, we have special classes for genomes.
+
+The `available.genomes()` function lists which genomes are currently available from Bioconductor (it is possible to make your own genome package). Note that there are several so-called "masked" genomes, where some parts of the genome are masked. 
+
+Load the latest yeast genome
+```{r BSgenome}
+available.genomes()
+library("BSgenome.Scerevisiae.UCSC.sacCer2")
+Scerevisiae
+```
+
+A `Biocpkg("BSgenome")` package contains a single object which is the second component of the name. At first, nothing is loaded into memory. You can get the length and names of the chromosomes without actually loading them.
+
+```{r BSgenomeLength}
+seqlengths(Scerevisiae)
+seqnames(Scerevisiae)
+```
+
+Load a chromosome by using the `[[` or `$` operators:
+```{r BSgenomeLoad}
+Scerevisiae$chrI
+```
+
+Compute the GC content of the first chromosome
+```{r gcChrI}
+letterFrequency(Scerevisiae$chrI, "CG", as.prob = TRUE)
+```
+
+There is the `bsapply` function which handles loading and unloading of different chromosomes.  You set up a `BSparams` object which contains which function you are using and which genome you are using it on (and a bit more information).  This paradigm is being used in other packages these days, for example `Biocpkg("BiocParallel")`.
+```{r gcGenome}
+param <- new("BSParams", X = Scerevisiae, FUN = letterFrequency)
+head(bsapply(param, letters = "GC"))
+```
+The additional argument `letters` to the `letterFrequency` function is given as an argument to `bsapply`, not to the `BSParams` object.  This gives us a list; you can simplify the output (like the difference between `lapply` and `sapply`) by
+
+```{r gcGenome2}
+param <- new("BSParams", X = Scerevisiae, FUN = letterFrequency, simplify = TRUE)
+bsapply(param, letters = "GC")
+```
+The GC percentage of the genome is
+
+```{r gcGenome3}
+sum(bsapply(param, letters = "GC")) / sum(seqlengths(Scerevisiae))
+```
+
