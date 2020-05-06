@@ -1,0 +1,1524 @@
+---
+title: "Survival Analysis Notes"
+author: "dizhen"
+date: "4/28/2020"
+output: 
+  html_document:
+    theme: united
+    toc: yes
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Survival Analysis
+
+## 1. Introduction: Datasets and Survival analysis in general
+
+The main packages needed.
+```{r}
+library("survival")
+library("ranger")
+library("ggfortify")
+library("lubridate")
+library("flexsurv")
+```
+
+CRAN Task View: Survival Analysis:
+https://cran.r-project.org/web/views/Survival.html
+
+survival package: a widely used package for Survival Analysis:
+https://cran.r-project.org/web/packages/survival/index.html
+
+
+
+1. The three main topics of survival analysis
+
+* Estimating the underlying survival function with life tables and Kaplan-Meier curves
+
+* Comparing the survival time of two or more groups with Log-rank test.
+
+* Desscribing the effect of covariates with Cox proportional hazards regression, survival trees and random forests.
+
+2. Three primary terms of survival analysis
+
+* Event ($\sigma_i$): 
+  - The event of interest depends on the study or the dataset. 
+  - E.g. Failure, death, disease, recovery, decay, development. 
+  - Binary: 0 or 1.
+
+* Time($t_i$): 
+  - The time interval between the begining of a study and the occurrence of the event.
+
+* Censoring($c_i$): 
+  - Occurs if a subject doesn't have an event during the observational time.
+
+3. Typical questions to be answered with survival analysis
+
+* What is the proportion of a population surviving past a centain time?
+
+* Of those that survive, at what rate will they die or fail
+
+* Can multiple causes of death or failure be taken into account?
+
+* What is the average survival time?
+
+* How do particular circumstances or characteristics change the probability of survival?
+
+```{r}
+## Import prostate_cancer as prost
+## A study on prostate cancer patients
+
+# Providing column names
+# colnames(prost) = c("patient", "treatment", "time", "status", "age", "sh", "size", "index")
+# save(prost, file = "prost.RData")
+load("prost.RData")
+head(prost)
+```
+
+4. The ideal data structure for survival analysis:
+Outliers and missing values are replaced.
+
+Propoer time format:
+
+* Data-time values
+
+* Time periods are calculated
+
+
+### Overview
+
+1. Non-parametric models:
+
+* Kaplan-Meier estimator
+
+* Logrank test
+
+2. The survival object
+
+* Function "Surv()"
+
+* Defines the relationship between event and time
+
+3. Kaplan-Meier plot: A step plot showing the decline in survival probability over time.
+
+* Additional binary covariate selected with the logrank test.
+
+### The Survival function
+
+a.k.a. "Reliability function", "Survival function", "Complementary cumulative distribution function".
+
+1. The Survival function
+$$
+S(t) = P(T>t) = 1-F(t)
+$$
+
+* $S(t)$: The survival estimation 
+
+* $P$: Probability
+
+* $T$: SUrvival time
+
+* $t$: Specified time point
+
+* $F(t)$: The inverse called cumulative distribution function
+
+* Related to the hazard function $h(t)$ or $\lambda(t)$
+
+2. The Hazard Rate
+
+$$
+h(t) = lim_{\delta t \rightarrow 0} \frac{1}{\delta t}P(t \leq T < t+\delta t|T\geq t)
+$$
+
+* $h(t)$: The risk of an event at time point t.
+
+* $P$: The probability that a subject has an event.
+
+* Instantaneous death rate/ intensity rate/ force of mortality/ hazard rate
+
+* Divide the probability ($P$) of an individual's survivor time ($T$) within an interval by the interval length($\delta t$)
+
+3. Integrated or Cumulative hazard
+
+$$
+H(t) = -log S(t)
+$$
+
+* $H(t)$ or $\Lambda (t)$: Cumulative hazard 
+
+* Adding the rate of risk per time unit up for every time unit passed
+
+* $t$: The time units already passed 
+
+* $S(t)$: The survival function
+
+4. Estimating the Survival Function
+
+* Kaplan-Meier estimator( non-parametric)
+
+* Exponential survial curve. The probability of an event is the same at any time point
+
+* Weibull distribution with optional pre-set probabilities in relation to time
+
+* Normal distribution (mean)
+
+### The survival object
+
+`Surv(time, time2, event,
+    type=c('right', 'left', 'interval', 'counting', 'interval2', 'mstate'),
+    origin=0)`
+
+time: follow up time (for right censored data); starting time (for interval data).
+
+time2: ending time (for interval data)
+
+event: 0=alive, 1=dead (for righer censored); 0=right censored, 1=event,2=left censored, 3=interval censored (for interval data).
+
+type: "right","left","counting","interval", etc.
+
+```{r}
+### The fundamental Surv function
+
+library(survival)
+
+Surv(prost$time, prost$status)
+```
+
+
+### The Kaplan-Meier estimator
+
+1. Calculating the estimator of survival
+
+$$
+\hat{S}(t) = \prod_{i:t_i\leq t}(1-\frac{d_i}{n_i})
+$$
+
+* $\hat{S}(t)$: The estimator of survival to time point t and beyond
+
+* $t_i$: The time point where at least one event happened
+
+* $d_i$: The number of events happening at time point t.
+
+* $n_i$: The number of individuals known to survive.
+
+2. The Kaplan-Meier estimator
+
+* A non-parametric statistic used to estimate the urvival function
+  - No underlying assumptions (parameters)
+  - Declining step plot
+
+* Incorporates censored data
+
+* It cannot incorporate covariates
+  - Comparison plot is possible
+
+* Two variables required in the data:
+  - Status of the event and time indicator
+  -Additional group indicator
+
+3. Kaplan-Meier Plot
+
+```{r mykm1 & mykm2 model for prost}
+# Simple Kaplan Meier plot
+
+mykm1 <- survfit(Surv(time, status) ~ 1, data = prost)
+
+plot(mykm1, mark.time = TRUE)
+
+
+
+# Stratified KM plot
+
+mykm2 <- survfit(Surv(time, status) ~ treatment, data = prost) ## alternative 2 line chart
+
+plot(mykm2, mark.time = TRUE)
+```
+
+4. Advanced Kaplan-Meier Plots
+
+* Libraries "ggplot2" and "ggfortify" - Function "autoplot()"
+
+* Libraries "ggplot2" and "survminer" - Function "ggsurvplot()"
+
+```{r}
+# Advanced plot
+
+library(ggfortify)
+
+autoplot(mykm2)
+```
+
+
+### The logrank test
+
+1. The logrank test
+
+* Allow to compare the survival distribution of two groups
+  - "Which treatment has a better survival probability?"
+
+* Non-parametric test
+  -Best used on right skewed data with censored events
+  -Alternative: Wilcoxon Rank Sum Test
+
+* Compares the estimates of the hazard functions of the two groups at each observed event time
+  1. Computes the observed and expected number of events
+  2. Results are added up to get a total across all time points
+  
+2. The logrank test statistic
+
+$$
+Z = \frac{\sum^J_{j=1}(O_{1j}-E_{1j})}{\sqrt{\sum^J_{j=1}V_j}} \overset{d}{\rightarrow} N(0,1)
+$$
+
+* Test statistic
+  - Normal distribution (mean ~ 0)
+  - Standard deviation(1)
+  
+* Null hypothesis: The hazard rate in each group is similar
+  - Rejected if the test statistic of Z is not normally distributed.
+  
+3. Assumption of the logrank test
+
+* Censoring is unrelated to the group setup
+
+* Survival probabilities are the same for all subjects
+
+* The events happened at the time specified.
+
+4 Implementation of logrank test in R
+
+```{r}
+# Log Rank Test
+
+survival::survdiff(survival::Surv(prost$time, prost$status) ~ prost$treatment)
+```
+
+p is not significant, meaning there is no difference in the survival probability of both treatment.
+
+### Practice
+
+Kaplan-Meier estimator and logrank test
+
+Dataset: motorette from "SMPracticals" (Times to failure of motorettes tested at different temperatures.)
+
+* Modeling the data
+  - Generate a Kaplan-Meier plot
+  - Get a logrank test and implement the temperature vairable
+  
+* Does the temperature have an effect on the failure rate?
+  - Create a new binary indicator "temp_binary" 
+  _ Threshold 180 F
+  
+```{r}
+# Exercise Kaplan Meier
+
+library(SMPracticals)
+
+head(motorette)
+
+plot(motorette$x, motorette$y)
+
+```
+```{r mykm1 & mykm2 model for motorette}
+library(survival)
+
+mykm1 <- survfit(Surv(y, cens) ~ 1, data = motorette)
+
+plot(mykm1, mark.time = TRUE)
+
+temp_binary = ifelse(motorette$x < 180, "low", "high"); temp_binary
+
+motorette$temp_binary = temp_binary
+
+survival::survdiff(survival::Surv(motorette$y, motorette$cens) ~ motorette$temp_binary)
+
+mykm2 <- survfit(Surv(y, cens) ~ temp_binary, data = motorette)
+
+plot(mykm2, mark.time = TRUE)
+```
+
+
+## 2. Improving the model accuracy
+
+### Cox proportional hazards model
+
+1. Hazard rate: The probability estimate of the time it takes for an event to take place
+
+2. Covariates： External factors taht influence the probability of an event
+
+3. The Cox Proportional Hazards Model Equation
+
+$$
+\lambda(t|X_i) = \lambda_0(t)exp(X_i\beta)\\
+h_i(t) = h_0(t)e^{X_i\beta}
+$$
+
+* $\lambda$ or $h$: The hazard
+
+* $i$: Subject
+
+* $t$: Time point
+
+* $\lambda_0(t)$ or $h_0(t)$: The baseline hazard rate at time point t.
+
+* $\lambda_0(t)$: The baseline hazard
+
+* $exp(X_i\beta)$: Changes of risks based on covariates.
+
+### Introduction of covariates
+
+1. Contribution of covariates
+
+* Covariates are defined prior to data recording
+
+* Accepted data types: Continuous numberic, binary, grouped factor variables.
+
+* Weight of significance is controlled by $\beta$
+
+* Assumptions: It is possible to estimate the effect of the $\beta$ parameters without any consideration of the hazard function
+  - The data should be stationary and constant overtime.
+  
+2. Implementation of Cox proportional hazards model in R
+
+```{r}
+### Cox Proportional Hazards Model
+
+cox <- coxph(Surv(time, status) ~ treatment + age + sh+ size + index,
+             data = prost)
+
+summary(cox)
+```
+
+3. Interpretation of model result
+
+* From the p-value, the age, size and index covariates are significant. Based on p-value, we can decide to keep or eliminate some covariates
+
+* The concordance: If your randomly choose two observations, it gives the probability of agreement. The chance of being correct in selecting the one observation with the higher risk of an event.
+  - Kendall's $\tau$ for continuous covariates
+  - Logistic regression for binary or grouped covariates
+  
+* We want the concordance to be closed to 1. Anything lower than 0.5 is a very bad model.
+
+* Rsquare: the fraction of the variance in the survival rate that is predicted from covariates. Note that the Rsquare value here is a pseudo version.
+
+* Likelihood ratio test, Wald test and Score(logrank) test are alternative to each other. They tell that covariance used in the model do in fact predict the survival rate. If the p-value is very small, we can reject the null hypothesis and conclude that the covariates do have an influence on the survival rate. df. = number of covariates
+
+```{r coxfit model for prost}
+# Getting a plot of the model
+
+autoplot(survfit(cox))
+
+# alternative
+
+coxfit = survfit(cox)
+
+autoplot(coxfit)
+```
+
+### Parametric models
+
+1. Distinguish three types of models
+
+```{r}
+library(knitr)
+library(kableExtra)
+
+table <- data.frame(Types = c("Non-parametric","Semi-parametric","Parametric"),Baseline_Hazard= c("No distribution assumed","No distribution assumed","Some distribution assumed"), Covariates = c("No distribution assumed","Some distribution assumed","Some distribution assumed"), Examples = c("Kaplan-Meier Estimator","Cox Proportional Hazards Model (covariates with exponential distribution)","Not popular. Parameter selection requires strong reasoning."))
+
+table %>%
+  kable() %>%
+  kable_styling()
+```
+
+* Distribution explains how the abservations are distributed in their occurrence.
+
+2. Parametric regression models
+
+* Main distribution types used in survival analysis
+  - Exponential: The probability of an event is the same at any time point
+  - Gaussian: Event probability is highest around the center of the survival curve
+  - Weibull: Allows to set a time on the survival curve (usually at the end where most of the events will likely take place)
+  
+```{r}
+# Parametric models
+
+library(flexsurv)
+
+# Weibull
+weib_mod = flexsurvreg(Surv(time, status) ~ treatment + age + sh+ size + index,
+                       data = prost, dist = "weibull")
+
+# Exponential
+exp_mod = flexsurvreg(Surv(time, status) ~ treatment + age + sh+ size + index,
+                      data = prost, dist = "exp")
+
+plot(weib_mod)
+
+lines(exp_mod, col="blue") 
+```
+
+The black line is Kaplan-Meier Plot. The red curve is under the Weibull distribution and the blue line is under the exponential distribution.
+
+
+### Aalen's regressor
+
+1. Covariates and Time
+
+* Cox proportional hazards model improved with covariates
+  - The influence of covariates might vary depending on the time point within the study
+  - E.g. the size of a tumor
+  
+* Modeling the time dependent effects of covariates with Aalen's additive regression model
+  - Function "aareg()" from library "survival"
+  
+2. Aalen's Additive Regression Model
+
+$$
+H(t) = a(t) + XB(t)
+$$
+
+* $H(t)$ or $\Lambda(t)$: Cumulative hazard
+
+* $a(t)$: The time dependent intercept term
+
+* $X$: The vector of covariates
+
+* $B(t)$: The time dependent matrix of coefficients
+
+* The result at the tail of the dataset can get inaccurate (risk), because there are naturally only very little subjects left in this study. (called the subjects at risk at the end of the study.)
+
+```{r}
+# Aalens additive regression
+
+aalen <- aareg(Surv(time, status) ~ treatment + age + sh+ size + index,
+               data = prost)
+
+autoplot(aalen)
+```
+
+We find that the index and size covariates have an increasing effect on the hazard rate. This means the longer a subject with a larger tumor or a high tumour index is in this study the more influential these covariates actually get. Higher age gets beneficial after some time (negative effect). sh and treatment stay approximately constant. The effect of intercept increases overtime.
+
+Aalen's Additive Regression Model should always be used in combination with Cox proportional hazards model.
+
+### Practice
+
+Coding a Cox proportional hazards model and interpreting the results
+
+Dataset: udca1 from 'survival' (2.43 or later) (Data from a trial of ursodeoxycholic acid (UDCA) in patients with primary biliary cirrohosis (PBC).)
+
+Fit the model and visualize it, answer the questions:
+
+* Which variables are the most important ones for the model?
+
+* Is there a difference between the two treatment groups?
+
+* How does the survival plot look for the two treatments?
+
+* Can you improve the concordance by eliminating non-significant covariates?
+
+```{r}
+library(dplyr)
+data("udca")
+glimpse(udca1)
+
+### Exercise Cox Prop Hazards
+
+# Cox Proportional Hazards
+
+cox <- coxph(Surv(futime, status) ~ trt + stage + bili + riskscore,
+             data = udca1)
+summary(cox)
+```
+
+Treatment (trt) is high significant. riskscore is not significant. stage and bili seem not contribute to the model.
+
+There are 169 samples in total(n= 169), the number of events is 72. There is 1 observation deleted due to missingness.
+
+The concordance is 0.684. This could be better. (close to 0.5 is a bad model, close to 1 is good model).
+
+From Likelihood ratio test, Wald test, score(logrank) test, the covariates do have an effect and are an important part of the model since p-values are very small.
+
+
+```{r}
+
+# Getting a plot of the model
+
+autoplot(survfit(cox))
+
+```
+
+After 1500 days the survival rate is around 50%, but at that time the number of patients is small. After 600 days the survival rate drops dramatically from 90% to 65% until 700 days. This indicates that it's better to take at most 600 days to receive a donor organ.
+
+```{r}
+# Standard Kaplan Meier plot to compare the treatments
+
+kmfit <- survfit(Surv(futime, status) ~ trt, data = udca1)
+
+autoplot(kmfit)
+```
+
+It is clear that the group with drug has higher survival rate than it with placebo. At the end, the survival rate of group with drug stays in 60% while it of group with placebo stays below 40%.
+
+
+```{r}
+# Can we improve the concordance by eliminating non significant covariates?
+
+cox2 <- coxph(Surv(futime, status) ~ trt,
+              data = udca1)
+summary(cox2)
+```
+
+We notice that the concordance has not been improved but decreased. Removing these non significant variables makes the model even worse. This is due to the risk score covariates which has some effect on the model. Overall it is a good idea to leave all the covariance in the model.
+
+## 3. Survival trees
+
+1. Tree Based Survival Model
+
+* Models are pruned to reduce complexity and prevent overfitting
+  * Removing sections of the tree that provide little power to classify instances
+ 
+* Works best on large datasets
+
+* Survival trees are non-linear models
+  * Linear assumption: A single line, curve or surface is sufficient to estimate a quantitative response.
+  * On some datasets the linear assumption cannot be justified, therefore a non-linear model (Survival tree) can provide better results.
+
+
+2. Implementation of decision tree in R
+
+* R packages for decision (survival) tree
+  * Library "rpart": toolset for machine learning
+  * Library "ranger": The package used for the demo
+  
+* ranger()
+  * Grouped variables - Classification tree
+  * Numeric variables - Regression tree
+  * Survival data - Survival tree
+  
+```{r Survival Trees for prost}
+### Survival Trees
+
+library(ranger)
+
+streefit = ranger(Surv(time, status) ~ treatment + age + sh + size + index,
+                  data = prost,
+                  importance = "permutation", 
+                  # importance: split rule; "permutation" is a good choice for survival trees
+                  splitrule = "extratrees",
+                  # splitrule: calculation function for split rule
+                  seed = 43)
+
+
+# Average the survival models
+
+death_times = streefit$unique.death.times
+death_times
+surv_prob = data.frame(streefit$survival)
+surv_prob
+avg_prob = sapply(surv_prob,mean)
+avg_prob
+
+```
+
+3. Visualize the survival tree
+
+* Plot the survival function for each study participant.
+
+* Plot the average of the survival functions (best and easiest)
+
+```{r}
+# Plot the survival tree model - average
+
+plot(death_times, avg_prob,
+     type = "s", # step plot
+     ylim = c(0,1),
+     col = "red", lwd = 2, bty = "n",
+     ylab = "Survival Probability", xlab = "Time in Months",
+     main = "Survival Tree Model\nAverage Survival Curve")
+
+
+plot(death_times, avg_prob,
+     type = "s", # step plot
+     ylim = c(0.5,1),
+     col = "red", lwd = 2, bty = "n",
+     ylab = "Survival Probability", xlab = "Time in Months",
+     main = "Survival Tree Model\nAverage Survival Curve")
+
+```
+
+4. Comparison plot
+
+* Our three main models for survival analysis
+  * Kaplan-Meier estimator
+  * Cox proportional hazards model
+  * Survival tree
+  
+* Comparison plot of survival models: "ggplot2" + data.frame
+  * Extract the relevant information from the models as a data frame (event time and survival probability)
+  * Generate one integrated data frame from the extracted data
+  * Plot the data frame with "ggplot2"
+  
+```{r}
+## Comparing the main models we discussed so far
+
+# Set up for ggplot
+
+# Dataframe for KM
+mykm1 <- survfit(Surv(time, status) ~ 1, data = prost)
+
+kmdf <- data.frame(mykm1$time,
+                   mykm1$surv,
+                   KM = rep("KM", 36))
+names(kmdf) <- c("Time in Months","Survival Probability","Model")
+
+# Dataframe for Cox PH Model
+cox <- coxph(Surv(time, status) ~ treatment + age + sh+ size + index,
+             data = prost)
+coxfit = survfit(cox)
+
+coxdf <- data.frame(coxfit$time,
+                    coxfit$surv,
+                    COX = rep("COX", 36))
+names(coxdf) <- c("Time in Months","Survival Probability","Model")
+
+# Dataframe for Random Forest
+rfdf <- data.frame(death_times,
+                   avg_prob,
+                   RF = rep("RF", 36))
+names(rfdf) <- c("Time in Months","Survival Probability","Model")
+
+# Fusing the dataframe
+plotdf <- rbind(kmdf,coxdf,rfdf)
+
+p <- ggplot(plotdf, aes(x = plotdf[,1] ,
+                        y = plotdf[,2] ,
+                        color = plotdf[,3]))
+
+p + geom_step(size = 2) +
+  labs(x = "Time in Months",
+       y = "Survival Probability",
+       color = "",
+       title = "Comparison Plot of\n3 Main Survival Models") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+The survival rate goes down after 50 months and goes down dramatically after 65 months. RF shows the most positive outlook at the last time point and COX shows the most negative outlook at the last time point. 
+
+* Survival tree: works best with huge datasets
+
+* Kaplan-Meier test: No covariates are included
+
+* Cox PH: Covariates are included.
+
+
+## 4. Date and time handling in R
+
+### Overview
+
+1. The core components of survival data
+
+* Status: indicates if an event happened or not
+
+* Time: how long it took to get to the status
+  
+2. Tools for handling dates and time in R
+
+* Standard options available in R base
+  * The class POSIXct and POSIXlt
+
+* Library "chron"
+
+* Converting a character into date format with function "strptime()"
+  * Dates are often imported as a character (-,:,;,/)
+
+* Library "lubridate"
+  * Allow mixed date formats within a column.
+  * Calculates the time interval between two time points.
+  
+  
+### Working with Dates and Time in R
+
+1. Converting and formatting dates in R
+
+* Things to be considered
+  * Time zones
+  * Date and time formats
+  * Leap years and seconds
+
+* Choosing the most suitable format and converting data between different formats
+
+* Extended R toolbox
+  * R base 
+  * Library 'lubridate'
+  
+2. The class POSIXt
+
+* The class POSIXt: Portable operating system interface for time; encoding system of date and time for most standard computer operating systems.
+  * POSIXct
+  * POSIXlt
+  
+```{r}
+### POSIXt classes in R
+
+x = as.POSIXct("2019-12-25 11:45:34") # nr of seconds
+
+y = as.POSIXlt("2019-12-25 11:45:34")
+
+x; y # it gives the same output, but what is behind it?
+
+unclass(x) # gives a long number
+
+unclass(y) # gives a list of elements
+
+```
+
+Unclass of POSIXct gives the amount of seconds. The reference time point for POSIXct is the birth second: 01-01-1970 00:00:00
+
+```{r}
+# what does the number mean?
+
+(50 * 365 * 24 * 60 * 60) - (5.5 * 60 * 60) # 
+
+y$zone # extracting the elements from POSIXlt
+
+# x$zone # not possible since it is simply a number of seconds
+```
+
+There are many classes related to POSIXt, such as Date class and chron class.
+
+```{r}
+# another class based on days
+
+x = as.Date("2019-12-25")
+x; class(x)
+
+unclass(x) # days
+
+50 * 365 - 5 # nr of days since 1970
+```
+
+```{r}
+library(chron)
+
+x = chron("12/25/2019", "23:34:09")
+x
+
+class(x)
+unclass(x)
+```
+
+R base classes: 
+
+* POSIXct - passed seconds since the birth second
+
+* POSIXlt - date and time components
+
+* Both POSIXct and POSIXlt account for date, time and time zones
+
+* Date - passed days since the birth day
+
+Library "chron"
+
+* chron - practical usage without time zone
+
+### Format conversion from strings to date
+
+* Date/ Time without encoding is read as string
+
+* Function strptime() for converting strings to date time values.
+
+```{r}
+### strptime
+
+?strptime
+
+a = as.character(c("1993-12-30 23:45",
+                   "1994-11-05 11:43",
+                   "1992-03-09 21:54"))
+class(a)
+
+b = strptime(a, format = "%Y-%m-%d %H:%M")
+b; class(b)
+```
+Format conversion with R base:
+
+* strptime()
+
+* Converts strings into date time or vice versa
+
+* Strings to be converted need to be uniform in their format
+
+* Encoding guide is included in the help section of strptime()
+
+### The Lubridate package
+
+1. library "lubridate": Convernient toolset for date and time handling
+
+* Date and time based calculations
+
+* Advanced format conversion
+
+* Changing the time zone
+
+* Checking for leap years
+
+```{r}
+
+### Lets take a look at the package lubridate which has very useful time/date data functions
+
+library(lubridate)
+
+# different ways in how to input dates
+
+ymd(19931123)
+
+dmy(23111993)
+
+mdy(11231993)
+```
+```{r}
+# lets use time and date together
+
+mytimepoint <- ymd_hm("1993-11-23 11:23", tz = "Europe/Prague")
+
+mytimepoint
+class(mytimepoint)
+```
+
+```{r}
+# extracting the components of it
+
+minute(mytimepoint)
+
+day(mytimepoint)
+
+hour(mytimepoint)
+
+year(mytimepoint)
+
+month(mytimepoint)
+
+# we can even change time values within our object
+
+hour(mytimepoint) <- 14
+
+mytimepoint
+```
+
+```{r}
+# which time zones do we have available
+
+OlsonNames()
+
+# we can take a look at the most common time zones
+
+# but be aware that the time zone recognition also depends on your location and machine
+
+```
+
+```{r}
+## lets check which day our time point is
+
+wday(mytimepoint) # third day of that week
+
+wday(mytimepoint, label=T, abbr=F) # label to display the name of the day, no abbreviation
+
+```
+```{r}
+# we can calculate which time our timepoint would be in another time zone
+
+with_tz(mytimepoint, tz = "Europe/London") 
+
+mytimepoint
+```
+
+```{r}
+# time intervals
+
+time1 = ymd_hm("1993-09-23 11:23", tz = "Europe/Prague")
+
+time2 = ymd_hm("1995-11-02 15:23", tz = "Europe/Prague")
+
+# getting the interval
+
+myinterval = interval(time1, time2); myinterval
+
+class(myinterval) # interval is an object class from lubridate
+
+```
+
+### Practice
+
+Create a data frame with separate date and time columns
+
+Measurement: random numbers (10 = mean) rounded to 2 decimal places
+
+Time zone: CET
+
+Try several different input formats for data and time
+
+1. Creating the vectors
+
+* A: date
+
+* B: time
+
+* C: measurement
+
+2. Converting vectors 'a' and 'b' into date and time formats
+
+3. Combining the vectors into one data framn with "cbind()"
+
+
+
+```{r}
+### Exercise: Creating a Data Frame with lubridate
+
+# lets now build a dataframe with lubridate that contains date and time data
+
+# see the different input formats that are allowed in the ymd function
+
+a = c("1998,11,11", "1983/01/23", "1982:09:04", "1945-05-09", 19821224, "1974.12.03", 19871210)
+
+a = ymd(a, tz = "CET") ;a
+
+# now I am creating a time vector - using different notations of input
+
+b = c("22 4 5", "04;09;45", "11:9:56", "23,15,12", "14 16 34", "8 8 23", "21 16 14")
+
+b = hms(b); b
+
+f = rnorm(7,10); f = round(f, digits = 2); f
+
+date_time_measurement = cbind.data.frame(date = a, time = b, measurement = f)
+
+date_time_measurement
+```
+
+### Calculations with Lubridate
+
+```{r}
+## Calculations with time
+
+minutes(7)
+
+# note that class "Period" needs integers - full numbers
+
+# minutes(2.5) # error
+
+# getting the duration in second
+
+dminutes(3)
+
+dminutes(3.5)
+
+```
+
+```{r}
+# how to add minutes and seconds
+
+minutes(2) + seconds(5) # separately
+
+# more calculations
+
+minutes(2) + seconds(75) # separately
+```
+```{r}
+# class "duration" to perform addition
+
+as.duration(minutes(2) + seconds(75)) # in second
+```
+
+1. period and duration
+
+* Class "period":  entries for different units are NOT cumulative;
+
+*Class "duration": entries for different units are cumulative
+
+```{r}
+# lubridate has many time classes: period or duration differ!
+
+# which year was a leap year?
+
+leap_year(2009:2014)
+
+ymd(20140101) + years(1)
+
+ymd(20140101) + dyears(1)
+
+# lets do the whole thing with a leap year
+
+leap_year(2016)
+
+ymd(20160101) + years(1)
+
+ymd(20160101) + dyears(1)
+
+# as you see the duration is the one which is always 365 days
+
+# the standard one (the period) makes the year a whole new unit (+1)
+
+```
+
+* Functions that result in class "period" are added to the specified date part
+  * E.g. year(1) = 1 year
+  * Units are not cumulative
+
+* Functins that result in class "duration" add the duration of the specified date part
+  * E.g. dyear(1) = 365 days
+  * Units are cumulative
+
+* Function leap_year() returns TRUE if specified year is a leap year.
+
+### Calculating interval length
+
+```{r}
+### Lubridate: calculating the time column
+
+head(udca)
+
+# simple method for properly formatted columns
+x1 = udca$last.dt - udca$entry.dt # time difference in days
+class(x1)
+
+# lubridate way is more flexible
+library(lubridate)
+
+x2 = as.period(interval(udca$entry.dt, udca$last.dt), unit = "day")
+x2 = day(x2) # numbers
+
+# add new column to dataframe
+udca.new = data.frame(udca, x1, x2); head(udca.new)
+str(udca.new)
+
+```
+
+    
+## 5. Outlier detection and missing value imputation
+
+### Introduction to Missing data handling
+
+1. General Categories of Missing Data
+
+* MCAR - Mising completely at random
+  * NAs are present due to randomness
+  * Deleting or replacing the NAs does not cause bias
+  
+* MAR - Missing at random
+  * NAs were produced for a random reason
+  * The reason has nothing to do with the observation
+  * Standard imputation methods can solve the issue
+  
+* MNAR - Missing not at random
+  * NAs are present for a reason
+  * Some observations cannot be captured properly
+  * The NAs cause correption in the analysis
+  
+2. Simple methods for missing data handling
+
+* Deleting: Amount of NAs is <5% and they are MCAR
+
+* Hot deck imputation: Replacing NAs with another abservation (eg. LOCF); can cause bias.
+
+* Imputation with mean: Replacing NAs with the mean results in less bias
+
+* Interpolation: replacement is identified via a predefined algorithm.
+
+* Problem: they do not account for uncertainty
+
+3. Multiple imputation methods
+
+* Calculate m number of values as replacement
+
+* A copy of the dataset for each set of replacements is generated
+
+* Analysis is performed on each copy
+
+* Average, variance and confidence intervals are taken from the pool
+
+* They work on MAR and MNAR datasets too
+
+* MICE- multiple imputation by Chained Equations
+
+### Simple methods for missing data handling
+
+1. Use a function with a built-in NA handling feature
+
+
+```{r}
+library(readr)
+FlowerPicks <- read_csv("FlowerPicks.csv",
+                        col_types = cols(X1 = col_skip()))
+
+### Missing Data Handling
+
+# Use FlowerPicks csv - remove ID column
+
+summary(FlowerPicks)
+
+# Vector with complete cases
+
+compcases <- complete.cases(FlowerPicks) == T
+
+# Per default R ignores missing data - na.action argument
+
+boxplot(Score ~ Player,FlowerPicks)
+
+
+
+lm(data = FlowerPicks, formula = Score ~ Time)
+```
+
+
+
+2. Use a basic function dedicated to NA handling
+
+```{r}
+
+# Using na.omit to remove al rows with an NA
+
+cleandata <- na.omit(FlowerPicks)
+
+summary(cleandata)
+
+# Data lost several rows - only 5475 observations
+
+```
+
+
+3. Use an advanced imputation tool
+
+* Library(zoo): Functions for missing data handling from the library "zoo"
+  * na.fill(): fill NA with value you provide manually and not recommendated unless there is strong reason.
+  * na.locf(): Take the value before the NA and replace it.
+  * na.spline(): linear interpolation to produce replacement.
+  * na.approx(): linear interpolation to produce replacement.
+  * na.aggregate(): take the mean for NA replacement
+  
+```{r}
+# zoo for column wise operations
+
+library(zoo)
+x = na.locf(FlowerPicks$Score)
+summary(x)
+```
+
+* Check the presence of NAs with summary()
+
+* Identifying complete observations with complete.cases()
+
+* Function with a built-in NA handling feature:
+  * e.g. "na.action=" argument -> omitting NAs  
+
+* Functions for omitting/ deleting NAs from the data:
+  * e.g. na.omit()
+
+* Simple imputation methods: 
+  * The na.x() functions from the library "zoo"
+
+### Missing data implementation with machine learning
+
+* Using machine learning algorithms for missing data handling
+
+* Complex yet effective method
+
+* Library "mice"
+  * various multiple imputation methods
+  * Dependency packages
+  
+* Dataset: FlowerPicks
+
+* Multiple imputation method work with the whole data.frame
+
+```{r}
+## Machine Learning for NA removal
+
+library(mice)
+
+# Distribution of the missing values
+
+md.pattern(FlowerPicks)
+
+# 1 row has 2 NAs
+```
+
+
+```{r}
+# Using the mice function
+
+mymice <- mice(FlowerPicks, 
+               m = 10, # number of imputation
+               method = "rf") # random forest
+
+
+# The result has class mids
+
+class(mymice)
+```
+
+library(mice)
+
+* Complex package = many dependencies 
+
+* Dependencies are usually installed by default
+
+* Further packages might also be required for particular tasks eg.
+  * Library(lattice) for plotting tasks
+  * Library(randomForest) for random forest models
+
+* install those packages on demand  
+  
+```{r}
+# Display the calculated data
+
+mymice$imp$Score
+
+# Fill the NAs
+
+mymicecomplete <- complete(mymice, 5)
+
+summary(mymicecomplete)
+```
+
+```{r}
+# Analysis with m variations of the dataset
+
+lmfit <- with(mymice, lm(Score ~ Time))
+
+# Pooling the results
+
+summary(pool(lmfit))
+
+```
+
+Workflow
+
+* Mulitple imputation methods with library(mice)
+
+* Creating 10 versions of the missing values with the function mice()
+  * Method = random forest ML algorithm
+  
+a. selecting one version of the imputation values with the function complete()
+
+b. 
+
+* Creating m versions of the model with the function with()
+  
+* Extracting the average of the model parameters with the function pool()
+
+### Statistical outliers
+
+1. Ourliers
+
+* Deleting and exchanging the outlier has drawbacks with small samples
+
+* Assumption: the data point is faulty
+
+* An outlier totally out of scale might be wrong measurement
+  * Not likely when measurements are automated
+  * Human mistakes are more likely to occur
+  * Example: plausibility checks in clinical research
+  
+* Outlier can be valid measurements and they might reveal hidden potentials
+
+
+2. Three sigma edit rule (to detect the outlier)
+
+* Calculates an interval around the mean
+  * Mean + t * SD
+  * Mean - t * SD
+
+* Data is to be expected within the range; Outlier: data outside the range
+
+* Common method in quality control
+
+* T=3 -> for normally distributed data the probability of observing a value more than three standard deviations from the mean is 0.3%
+
+* Caution: both mean and standard deviation are sensitive to the presence of outliers.
+
+3. Boxplot method
+
+* The lower and upper quartiles of the boxplot provide the interval borders
+  * Q1-c * IQD
+  * Q3-c * IQD
+
+* IQD = Q3 - Q1 -> Interquartile distance
+
+* C = 1.5 -> Most commonly used value
+
+* Less sensitive to the presence of outliers.
+
+4. Advanced methods for multivariate data
+
+* Model based method
+  * Fit the appropriate model to the dataset
+  * Data points outside the model are outliers
+  * Models based on deviation, probability statisctis or depth
+  
+* Proximity based method
+  * Calculates the distance of the data points
+  * Significantly different proximity measure is considered as an ourlier.
+  
+5. Outliers in data visualization
+
+* Mark the outliers with different colors or shapes
+
+* Boxplots are visually the most suitable 
+
+* Scatterplot: values need to be separated
+
+* Some R and Python packages support outlier identification
+  * Library(mvoutlier) in R
+  
+### Detecting outliers in univariate datasets
+
+1. Outlier detection : Univariate
+  
+  Use a stats tests + distance measure approach
+
+* ESD method:
+  * Mean + t * SD
+  * Mean - t * SD
+
+* Boxplot method
+
+* Tests from library(outliers)
+
+```{r}
+
+# [mean - t * SD, mean + t * SD]
+
+x = c(rnorm(10), 150); x
+t = 3 # range
+m = mean(x)
+s = sd(x)
+
+b1 = m - s*t; b1 
+b2 = m + s*t; b2
+
+y = ifelse(x >= b1 & x <= b2, 0, 1); y # outlier identifier
+
+plot(x, col=y+2)
+
+```
+
+```{r}
+# simple boxplot
+
+boxplot(x)
+
+boxplot.stats(x) # give outliers
+```
+
+```{r}
+# package outliers
+
+library(outliers)
+
+dixon.test(x)
+
+grubbs.test(x, type = 11, two.sided = T) # type 11 for 2 sides, opossite
+
+```
+
+
+2. Multivariate methods
+
+* Library(mvoutliers)
+  
+  * Methods
+    * sign1, sign2 and pcout calculate the distance between data points while relying on principle analysis
+    
+  * Exercise datasets
+  
+  * Plot
+    * Visualizing multivariate datasets.
+  
+```{r}
+### advanced techniques for multivariate data
+
+library(mvoutlier)
+
+elements = data.frame(Hg = moss$Hg, Fe = moss$Fe, Al = moss$Al, Ni = moss$Ni) 
+head(elements)
+
+myout = sign1(elements[,1:4], qqcrit = 0.975); myout
+
+myout = pcout(elements[,1:4])
+
+plot(moss$Fe, moss$Al, col=myout$wfinal01+2)
+# red points are ourliers
+```
+
+### Exercise:
+
+Missing data imputation and outlier detection
+
+Dataset: mgus from "survival"
+
+1. Eliminate the two columns featuring too many missing values
+
+2. Test the column "creat" for outliers and replace the outliers with NA or a marker
+
+3. Replace the missing values and outliers with suitable values
+
+```{r}
+
+## Exercise Missing Data with mgus
+
+library(survival)
+data(mgus)
+head(mgus)
+str(mgus)
+summary(mgus)
+```
+
+```{r}
+# Removing columns
+
+mgusnew = mgus[,-c(5,6)]
+
+# Statistical test for outliers
+
+library(outliers)
+
+grubbs.test(mgusnew$creat, type = 10)
+
+boxplot(mgusnew$creat)
+
+```
+
+
+```{r}
+
+# Identify and replace all values above threshold
+
+x = which(mgusnew$creat > 2.5)
+
+mgusnew$creat[x] = NA
+
+# Check the column maximum
+
+summary(mgusnew)
+
+```
+```{r}
+# NA replacement with mice
+
+library(mice)
+
+mymice <- mice(mgusnew, m = 3, method = "norm")
+
+mymicecomplete <- complete(mymice, 3)
+
+summary(mymicecomplete)
+```
+
+
+
+
