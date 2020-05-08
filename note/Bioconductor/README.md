@@ -2,9 +2,21 @@
 
 
 
-Recourses:
+### Recourses:
 
-1.  [PH525x series - Biomedical Data Science](..\..\CS basics\6、Bioconductor for Genomic Data Science\PH525x series - Biomedical Data Science.html) 
-2.  [Bioconductor for Genomic Data Science](..\..\CS basics\6、Bioconductor for Genomic Data Science\Bioconductor for Genomic Data Science.html) 
-3.  [BIOS6660 2015 R Genomic Objects](..\..\CS basics\6、Bioconductor for Genomic Data Science\BIOS6660 2015 R Genomic Objects.html) 
+
+
+[PH525x series - Biomedical Data Science]( http://genomicsclass.github.io/book/ ) 
+
+
+
+[Bioconductor for Genomic Data Science]( https://kasperdanielhansen.github.io/genbioconductor/ ) 
+
+
+
+[BIOS6660 2015 R Genomic Objects]( http://compbio.ucdenver.edu/Hunter_lab/Phang/resources/Teaching/BIOS6660/Week-3-Day-1-GenomicObjects/BIOS6660_2015_RGenomicObjects_Lecture_BioConductor.html ) 
+
+
+
+[Tzuinformatics - Bridging Bioinformatics and Biology]( http://compbio.ucdenver.edu/Hunter_lab/Phang/Teaching/my_courses/bios6660.html )
 
