@@ -2,7 +2,7 @@
 
 
 
-### Recourses:
+### Resources:
 
 
 
